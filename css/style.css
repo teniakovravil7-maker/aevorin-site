@@ -94,6 +94,49 @@ html.has-cursor, html.has-cursor *{ cursor: none !important; }
   #cursor-dot, #cursor-ring{ display:none; }
 }
 
+/* -------------------- scroll progress -------------------- */
+#scroll-progress{
+  position: fixed; top:0; left:0; right:0; height:3px;
+  z-index: 9100;
+  background: linear-gradient(90deg, var(--a1), var(--a2));
+  transform: scaleX(0);
+  transform-origin: left;
+  will-change: transform;
+  transition: background var(--transition-theme);
+}
+
+/* -------------------- marquee ribbon -------------------- */
+.marquee{
+  position:relative; z-index:1;
+  overflow:hidden;
+  border-top:1px solid var(--panel-border);
+  border-bottom:1px solid var(--panel-border);
+  background: var(--panel);
+  padding: 14px 0;
+  white-space:nowrap;
+}
+.marquee .track{
+  display:inline-flex;
+  gap: 48px;
+  padding-left: 48px;
+  animation: marquee-scroll 26s linear infinite;
+  will-change: transform;
+}
+.marquee span{
+  font-family:'Playfair Display', serif;
+  font-style: italic;
+  font-size: 1rem;
+  letter-spacing: 1px;
+  color: var(--text-faint);
+  display:inline-flex; align-items:center; gap:14px;
+  flex-shrink:0;
+}
+.marquee span::after{ content:"✦"; color: var(--a2); }
+@keyframes marquee-scroll{
+  from{ transform: translateX(0); }
+  to{ transform: translateX(-50%); }
+}
+
 /* -------------------- page transition curtain -------------------- */
 #page-curtain{
   position: fixed;
@@ -168,6 +211,12 @@ html.no-loader #loader{ display:none !important; }
   inset: -10%;
   z-index: 0;
   pointer-events: none;
+  will-change: transform;
+}
+.bg-aurora::before{
+  content:"";
+  position:absolute;
+  inset:0;
   background:
     radial-gradient(45% 38% at 18% 18%, rgba(var(--glow),.35), transparent 70%),
     radial-gradient(40% 35% at 85% 12%, rgba(var(--glow),.18), transparent 70%),
@@ -216,8 +265,8 @@ html.no-loader #loader{ display:none !important; }
   animation: flicker 2.4s ease-in-out infinite;
 }
 @keyframes flicker{
-  0%,100%{ transform: rotate(45deg) scale(1); }
-  50%{ transform: rotate(45deg) scale(1.18); }
+  0%,100%{ transform: rotate(45deg) scale(1); filter: brightness(1); }
+  50%{ transform: rotate(45deg) scale(1.18); filter: brightness(1.3); }
 }
 
 .nav-links{
@@ -314,7 +363,7 @@ html.no-loader #loader{ display:none !important; }
   position: relative;
   overflow: hidden;
   will-change: transform;
-  transition: transform .25s cubic-bezier(.22,.61,.36,1), box-shadow .3s, background var(--transition-theme);
+  transition: transform .4s cubic-bezier(.16,1,.3,1), box-shadow .3s, background var(--transition-theme);
 }
 .btn-primary{
   background: linear-gradient(120deg, var(--a1), var(--a2));
@@ -462,9 +511,10 @@ html.no-loader #loader{ display:none !important; }
 .reveal{
   opacity:0;
   transform: translateY(34px);
-  transition: opacity .8s cubic-bezier(.22,.61,.36,1), transform .8s cubic-bezier(.22,.61,.36,1);
+  filter: blur(6px);
+  transition: opacity 1s cubic-bezier(.16,1,.3,1), transform 1s cubic-bezier(.16,1,.3,1), filter 1s cubic-bezier(.16,1,.3,1);
 }
-.reveal.in{ opacity:1; transform: translateY(0); }
+.reveal.in{ opacity:1; transform: translateY(0); filter: blur(0); }
 .reveal-stagger > *{ transition-delay: calc(var(--i,0) * 90ms); }
 
 /* -------------------- cards -------------------- */
@@ -485,7 +535,7 @@ html.no-loader #loader{ display:none !important; }
   overflow:hidden;
   transform-style: preserve-3d;
   will-change: transform;
-  transition: transform .35s cubic-bezier(.22,.61,.36,1), border-color .4s, box-shadow .4s;
+  transition: transform .5s cubic-bezier(.16,1,.3,1), border-color .4s, box-shadow .4s;
 }
 .card::before{
   content:"";
@@ -496,11 +546,22 @@ html.no-loader #loader{ display:none !important; }
   transition: opacity .4s;
   pointer-events:none;
 }
+.card::after{
+  content:"";
+  position:absolute;
+  top:0; left:-60%;
+  width:35%; height:100%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.14), transparent);
+  transform: skewX(-15deg);
+  transition: left .9s cubic-bezier(.16,1,.3,1);
+  pointer-events:none;
+}
 .card:hover{
   border-color: rgba(var(--glow),.45);
   box-shadow: 0 26px 60px -20px rgba(var(--glow),.4);
 }
 .card:hover::before{ opacity:1; }
+.card:hover::after{ left: 130%; }
 
 .card .icon{
   width: 46px; height:46px;

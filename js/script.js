@@ -118,11 +118,35 @@ var AEVORIN_COARSE = window.matchMedia && window.matchMedia('(pointer: coarse)')
       });
     });
 
-    // ---- header shadow on scroll ----
+    // ---- header shadow + scroll progress + parallax (rAF-throttled) ----
+    var progress = document.createElement('div');
+    progress.id = 'scroll-progress';
+    document.body.appendChild(progress);
+    var aurora = document.querySelector('.bg-aurora');
+    var scrollTicking = false;
+    function onScrollFrame(){
+      var doc = document.documentElement;
+      var max = doc.scrollHeight - window.innerHeight;
+      var y = window.scrollY;
+      progress.style.transform = 'scaleX(' + (max > 0 ? Math.min(y / max, 1) : 0) + ')';
+      if(header) header.style.boxShadow = y > 12 ? '0 10px 30px -20px rgba(0,0,0,.6)' : 'none';
+      if(aurora && !AEVORIN_REDUCE_MOTION) aurora.style.transform = 'translateY(' + Math.min(y * 0.08, 180) + 'px)';
+      scrollTicking = false;
+    }
     window.addEventListener('scroll', function(){
-      if(!header) return;
-      header.style.boxShadow = window.scrollY > 12 ? '0 10px 30px -20px rgba(0,0,0,.6)' : 'none';
+      if(!scrollTicking){ scrollTicking = true; requestAnimationFrame(onScrollFrame); }
     });
+    onScrollFrame();
+
+    // ---- marquee ribbon (inserted after header) ----
+    if(header && !document.querySelector('.marquee')){
+      var words = ['AEVORIN', 'FIRE OR ICE', 'ВІРА', 'НАДІЯ', 'ЛЮБОВ', 'ЦАРСТВО БОЖЕ', 'ВОГОНЬ', 'ЛІД'];
+      var trackHtml = words.map(function(w){ return '<span>' + w + '</span>'; }).join('');
+      var marquee = document.createElement('div');
+      marquee.className = 'marquee';
+      marquee.innerHTML = '<div class="track">' + trackHtml + trackHtml + '</div>';
+      header.insertAdjacentElement('afterend', marquee);
+    }
 
     // ---- word-reveal hero heading ----
     var h1 = document.querySelector('.hero h1');
@@ -200,9 +224,13 @@ var AEVORIN_COARSE = window.matchMedia && window.matchMedia('(pointer: coarse)')
     });
 
     function loop(){
+      var px = rx, py = ry;
       rx += (mx - rx) * 0.18;
       ry += (my - ry) * 0.18;
-      ring.style.transform = 'translate(' + rx + 'px,' + ry + 'px) translate(-50%,-50%)';
+      var vx = rx - px, vy = ry - py;
+      var speed = Math.min(Math.sqrt(vx * vx + vy * vy) * 0.06, 0.6);
+      var angle = Math.atan2(vy, vx) * 180 / Math.PI;
+      ring.style.transform = 'translate(' + rx + 'px,' + ry + 'px) translate(-50%,-50%) rotate(' + angle + 'deg) scale(' + (1 + speed) + ',' + (1 - speed * 0.4) + ')';
       requestAnimationFrame(loop);
     }
     loop();
