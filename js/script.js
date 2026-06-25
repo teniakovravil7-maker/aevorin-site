@@ -250,6 +250,175 @@ var AEVORIN_COARSE = window.matchMedia && window.matchMedia('(pointer: coarse)')
   });
 })();
 
+// ================= inline editor (owner-only) =================
+(function(){
+  var TOKEN_KEY = 'aevorin-gh-token';
+  var REPO = 'teniakovravil7-maker/aevorin-site';
+  var editMode = false;
+  var dirty = false;
+  var bar = null;
+
+  function getToken(){ try{ return localStorage.getItem(TOKEN_KEY); }catch(e){ return null; } }
+  function setToken(t){ try{ localStorage.setItem(TOKEN_KEY, t); }catch(e){} }
+  function clearToken(){ try{ localStorage.removeItem(TOKEN_KEY); }catch(e){} }
+
+  function currentFile(){
+    var parts = location.pathname.split('/').filter(Boolean);
+    var last = parts[parts.length - 1] || '';
+    return /\.html$/.test(last) ? last : 'index.html';
+  }
+
+  function unsplitHeading(h1){
+    if(!h1 || !h1.dataset.split) return;
+    var lines = [];
+    var current = [];
+    h1.childNodes.forEach(function(node){
+      if(node.nodeName === 'BR'){ lines.push(current.join(' ')); current = []; }
+      else if(node.nodeType === 1 && node.classList.contains('word')){ current.push(node.textContent); }
+    });
+    lines.push(current.join(' '));
+    h1.innerHTML = lines.join('<br>');
+    delete h1.dataset.split;
+    h1.style.opacity = '';
+    h1.style.animation = '';
+  }
+
+  function editableSelector(){
+    return 'main h1, main h2, main h3, main p, main blockquote, main .value, main .label, main .tag, main .eyebrow';
+  }
+
+  function setStatus(msg){
+    if(!bar) return;
+    var s = bar.querySelector('.status');
+    if(s) s.textContent = msg;
+  }
+
+  function enterEdit(){
+    unsplitHeading(document.querySelector('.hero h1'));
+    document.querySelectorAll(editableSelector()).forEach(function(el){
+      el.setAttribute('contenteditable', 'true');
+      el.classList.add('edit-target');
+      el.addEventListener('input', function(){ dirty = true; setStatus('Є незбережені зміни'); });
+    });
+    editMode = true;
+    document.body.classList.add('edit-mode');
+  }
+
+  function exitEdit(){
+    document.querySelectorAll('[contenteditable="true"]').forEach(function(el){
+      el.removeAttribute('contenteditable');
+      el.classList.remove('edit-target');
+    });
+    editMode = false;
+    dirty = false;
+    document.body.classList.remove('edit-mode');
+  }
+
+  // block link navigation while editing (capture phase, fires before the page-curtain handler)
+  document.addEventListener('click', function(e){
+    if(!editMode) return;
+    if(e.target.closest && e.target.closest('#edit-toolbar')) return;
+    var a = e.target.closest('a');
+    if(a){ e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+
+  window.addEventListener('beforeunload', function(e){
+    if(dirty){ e.preventDefault(); e.returnValue = ''; }
+  });
+
+  function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
+  function b64decode(str){ return decodeURIComponent(escape(atob(str))); }
+
+  function saveToGitHub(){
+    var token = getToken();
+    if(!token){ setStatus('Немає токена. Натисни «Вийти» і увійди знову.'); return; }
+    var file = currentFile();
+    setStatus('Збереження…');
+
+    fetch('https://api.github.com/repos/' + REPO + '/contents/' + file, {
+      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' }
+    })
+    .then(function(res){
+      if(!res.ok) throw new Error('Не вдалося прочитати файл (' + res.status + ')');
+      return res.json();
+    })
+    .then(function(fileData){
+      var raw = b64decode(fileData.content);
+      var startIdx = raw.indexOf('<main>');
+      var endIdx = raw.lastIndexOf('</main>');
+      if(startIdx === -1 || endIdx === -1) throw new Error('Не знайдено <main> у файлі');
+
+      var newMainHtml = '<main>\n' + document.querySelector('main').innerHTML.trim() + '\n</main>';
+      var newRaw = raw.slice(0, startIdx) + newMainHtml + raw.slice(endIdx + '</main>'.length);
+
+      return fetch('https://api.github.com/repos/' + REPO + '/contents/' + file, {
+        method: 'PUT',
+        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' },
+        body: JSON.stringify({
+          message: 'Edit ' + file + ' via site editor',
+          content: b64encode(newRaw),
+          sha: fileData.sha,
+          branch: 'main'
+        })
+      });
+    })
+    .then(function(res){
+      if(!res.ok) return res.text().then(function(t){ throw new Error('GitHub відмовив (' + res.status + '): ' + t.slice(0, 200)); });
+      dirty = false;
+      setStatus('Збережено! Сайт оновиться за ~1 хв.');
+    })
+    .catch(function(err){
+      setStatus('Помилка: ' + err.message);
+    });
+  }
+
+  function showToolbar(){
+    if(bar) return;
+    bar = document.createElement('div');
+    bar.id = 'edit-toolbar';
+    bar.innerHTML =
+      '<button id="edit-save" class="btn btn-primary btn-sm">Зберегти</button>' +
+      '<button id="edit-exit" class="btn btn-ghost btn-sm">Вийти</button>' +
+      '<button id="edit-logout" class="btn btn-ghost btn-sm">Вийти з акаунту</button>' +
+      '<span class="status">Режим редагування увімкнено</span>';
+    document.body.appendChild(bar);
+    bar.querySelector('#edit-save').addEventListener('click', saveToGitHub);
+    bar.querySelector('#edit-exit').addEventListener('click', function(){
+      if(dirty && !confirm('Незбережені зміни буде втрачено. Вийти?')) return;
+      exitEdit();
+      bar.remove();
+      bar = null;
+    });
+    bar.querySelector('#edit-logout').addEventListener('click', function(){
+      clearToken();
+      exitEdit();
+      if(bar){ bar.remove(); bar = null; }
+      alert('Токен видалено з цього браузера.');
+    });
+  }
+
+  function startEditing(){
+    var token = getToken();
+    if(!token){
+      token = prompt('Встав свій GitHub Personal Access Token\n(fine-grained, доступ лише до репозиторію aevorin-site, права Contents: Read and write):');
+      if(!token) return;
+      setToken(token.trim());
+    }
+    enterEdit();
+    showToolbar();
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    var dot = document.createElement('div');
+    dot.id = 'edit-trigger';
+    dot.title = 'Редагувати сайт';
+    document.body.appendChild(dot);
+    dot.addEventListener('click', function(){
+      if(!editMode) startEditing();
+    });
+  });
+})();
+
 // ================= particle background (embers / ice shards) =================
 (function(){
   var canvas = document.getElementById('fx-canvas');
