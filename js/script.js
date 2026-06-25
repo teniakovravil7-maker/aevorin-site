@@ -329,6 +329,16 @@ var AEVORIN_COARSE = window.matchMedia && window.matchMedia('(pointer: coarse)')
   function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
   function b64decode(str){ return decodeURIComponent(escape(atob(str))); }
 
+  function cleanMainHtml(){
+    var clone = document.querySelector('main').cloneNode(true);
+    clone.querySelectorAll('[contenteditable]').forEach(function(el){
+      el.removeAttribute('contenteditable');
+      el.classList.remove('edit-target');
+      if(el.getAttribute('class') === '') el.removeAttribute('class');
+    });
+    return clone.innerHTML.trim();
+  }
+
   function saveToGitHub(){
     var token = getToken();
     if(!token){ setStatus('Немає токена. Натисни «Вийти» і увійди знову.'); return; }
@@ -348,7 +358,7 @@ var AEVORIN_COARSE = window.matchMedia && window.matchMedia('(pointer: coarse)')
       var endIdx = raw.lastIndexOf('</main>');
       if(startIdx === -1 || endIdx === -1) throw new Error('Не знайдено <main> у файлі');
 
-      var newMainHtml = '<main>\n' + document.querySelector('main').innerHTML.trim() + '\n</main>';
+      var newMainHtml = '<main>\n' + cleanMainHtml() + '\n</main>';
       var newRaw = raw.slice(0, startIdx) + newMainHtml + raw.slice(endIdx + '</main>'.length);
 
       return fetch('https://api.github.com/repos/' + REPO + '/contents/' + file, {
